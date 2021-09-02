@@ -26,13 +26,14 @@ export class AppComponent {
   copyMessage = {title: 'Information !', content: 'copied Rows', cssClass: 'e-toast-info'}
   filterSettings: FilterSettingsModel = {type: 'Menu'};
   sortSettings: SortSettingsModel = {
-    columns: [{field: 'TaskName', direction: 'Ascending'}]
+    columns: []
   };
   pageSettings: PageSettingsModel = {pageCount: 3};
   editSettings: EditSettingsModel = {
     allowEditing: true,
     allowAdding: true,
     allowDeleting: true,
+
     // @ts-ignore
     mode: 'Row'
   };
@@ -52,18 +53,31 @@ export class AppComponent {
 
   @HostListener('window:keydown', ['$event'])
   onKeyPress($event: KeyboardEvent) {
-    if (($event.ctrlKey || $event.metaKey) && $event.keyCode == 67) {
+    if (($event.ctrlKey || $event.metaKey) && $event.key == 'c') {
+      $event.stopPropagation();
       this.dataCopied = true;
-      console.log('copy');
+      this.copiedRows = this.selectedRows;
       this.element.show(this.copyMessage);
     }
-    if (($event.ctrlKey || $event.metaKey) && $event.keyCode == 86) {
-      if (this.dataCopied) {
-        console.log('pest');
-        this.add();
-        // @ts-ignore
-        console.log((this.treegridObj as TreeGridComponent).dataSource.length);
-      }
+
+    if (($event.ctrlKey || $event.metaKey) && $event.key == 'x') {
+      $event.stopPropagation();
+      this.selectedRows.forEach(value => {
+        this.treegridObj.deleteRecord(value);
+      })
+      this.copiedRows = this.selectedRows;
+    }
+    if (($event.ctrlKey || $event.metaKey) && $event.key == 'v') {
+      $event.stopPropagation();
+      this.copiedRows.map(value => {
+        value = JSON.parse(JSON.stringify(value))
+        value.TaskID = Math.round(1456789 * (Math.random() * 100))
+        value.taskData.TaskID = value.TaskID;
+        this.treegridObj.addRecord(value.taskData, this.selectedRows[this.selectedRows.length - 1].index, "Below")
+        // this.treegridObj.refresh()
+        return value;
+      })
+
     }
   }
 
@@ -74,7 +88,30 @@ export class AppComponent {
     'Delete',
     'Save',
     'Copy',
-    'Peste',
+    {
+      text: 'Cut',
+      target: '.e-rowcell',
+      id: 'cut'
+    },
+    {
+      text: 'Peste',
+      target: '.e-rowcell',
+      id: 'paste_bellow',
+      items: [
+        {
+          text: 'Above',
+          id: 'paste_above'
+        },
+        {
+          text: 'Bellow',
+          id: 'paste_bellow'
+        },
+        {
+          text: 'Child',
+          id: 'paste_child'
+        },
+      ]
+    },
     'Cancel',
     'FirstPage',
     'PrevPage',
@@ -89,20 +126,77 @@ export class AppComponent {
     showCheckbox: true
   };
   selectedRows = [];
+  copiedRows = [];
   toolbarOptions = ['Add', 'Edit', 'Delete', 'Update', 'Cancel'];
   selectedColumn = null;
 
   ngOnInit(): void {
-    // this.data = new DataManager({
-    //   // adaptor: new JsonAdaptor(),
-    //   offline: true,
-    //   json: data
-    // });
     this.pageSetting = {pageCount: 3};
     // console.log(this.data.dataSource);
   }
 
   contextMenuClick(args?: MenuEventArgs): void {
+    console.log(args.item.id);
+    if (args.item.id === '_gridcontrol_cmenu_Copy') {
+      this.copiedRows = this.selectedRows;
+    }
+    if (args.item.id === 'paste_above') {
+      console.log(this.copiedRows);
+      console.log(this.selectedRows)
+      this.copiedRows.forEach(value => {
+        const data = {
+          TaskID: value.TaskID,
+          TaskName: value.TaskName,
+          StartDate: value.StartDate,
+          EndDate: value.EndDate,
+          Progress: value.Progress,
+          Priority: value.Priority,
+          Duration: value.Duration,
+        }
+        if (value.ParentItem) {
+          // @ts-ignore
+          data.ParentItem = value.ParentItem;
+        }
+
+        if (value.isParent != undefined) {
+          // @ts-ignore
+          data.isParent = value.isParent;
+        }
+
+        data.TaskID = Math.round(1456789 * (Math.random() * 100))
+        console.log(JSON.parse(JSON.stringify(data)));
+        this.treegridObj.addRecord(JSON.parse(JSON.stringify(data)), this.selectedRows[0].index, "Above")
+        // this.treegridObj.refresh()
+      })
+      // this.treegridObj.refresh()
+    }
+    if (args.item.id === 'cut') {
+      this.selectedRows.forEach(value => {
+        this.treegridObj.deleteRecord(value);
+
+      })
+      // this.treegridObj.refresh()
+    }
+    if (args.item.id === 'paste_bellow') {
+      this.copiedRows.map(value => {
+        value = JSON.parse(JSON.stringify(value))
+        value.TaskID = Math.round(1456789 * (Math.random() * 100))
+        value.taskData.TaskID = value.TaskID;
+        this.treegridObj.addRecord(value.taskData, this.selectedRows[this.selectedRows.length - 1].index, "Below")
+        // this.treegridObj.refresh()
+      })
+    }
+    if (args.item.id === 'paste_child') {
+      this.copiedRows.map(value => {
+        value = JSON.parse(JSON.stringify(value))
+        value.TaskID = Math.round(1456789 * (Math.random() * Math.random() * 100))
+        value.taskData.TaskID = value.TaskID;
+        this.selectedRows[this.selectedRows.length - 1].isParent = true;
+        value.parentItem = this.selectedRows[this.selectedRows.length - 1];
+        value.ParentItem = this.selectedRows[this.selectedRows.length - 1].TaskID;
+        this.treegridObj.addRecord(value.taskData, this.selectedRows[this.selectedRows.length - 1].index, "Child")
+      })
+    }
     if (args.item.id === 'add_column') {
       this.addColumn();
     } else if (args.item.id === 'delete_column') {
@@ -135,42 +229,33 @@ export class AppComponent {
   }
 
   contextMenuOpen(arg?: BeforeOpenCloseEventArgs): void {
-    console.log(arg);
+
     // @ts-ignore
-    console.log(isNullOrUndefined(this.columns[arg.column.index]));
-    // @ts-ignore
-    if (!isNullOrUndefined(this.columns[arg.column.index])) {
+    if (!isNullOrUndefined(this.columns[arg.column?.index])) {
       // @ts-ignore
       this.selectedColumn = arg.column.index;
     }
   }
 
   selectedRow(e) {
-    console.log(e);
     if (e.data instanceof Array) {
 
       this.selectedRows = e.data
     } else {
       this.selectedRows = [e.data]
     }
-    console.log(this.selectedRows);
   }
-
 
 
   add() {
     const dataSource = (this.treegridObj as TreeGridComponent)
       .dataSource as object[];
-    this.selectedRows.forEach(value => {
-      dataSource.push(value);
-    });
-    this.selectedRows = [];
+    console.log(this.copiedRows)
+    dataSource.splice(this.selectedRows[this.copiedRows.length - 1].index, 0, ...this.copiedRows);
+    this.copiedRows = [];
     (this.treegridObj as TreeGridComponent).dataSource = dataSource;
-    // this.showTable = false;
-    this.treegridObj.refresh();
-    // setTimeout(() => {
-    //   this.showTable = true;
-    // }, 200)
+
   }
+
 }
 
